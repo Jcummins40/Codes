@@ -1,0 +1,118 @@
+from __future__ import print_function
+from dolfin import *
+from mshr import *
+import matplotlib.pyplot as plt #we import matplotlib for plotting 
+from matplotlib import pyplot
+import numpy as np
+
+
+T =1000           
+num_steps = 200
+dt = T/num_steps
+kt=Constant(dt) 
+aniso = 1/(10*10*10*10)
+K = Constant(aniso)
+a = Constant(0.1)
+beta = Constant(0.5)
+gamma = Constant(1.0)
+sigma = Constant(0.0)
+epsilon = Constant(0.01)
+
+nx = ny = 200
+mesh = RectangleMesh(Point(0, 0), Point(2.5, 2.5), nx, ny)
+
+
+V=FunctionSpace(mesh, 'P', 1)
+ 
+
+v = TestFunction(V)
+v2 = TestFunction(V)
+
+def boundary(x, on_boundary):
+   return on_boundary
+bc = DirichletBC(V, Constant(0), boundary)
+
+u0 = Expression('x[0] <= 1.25 && x[1] < 1.25 ? 1 : 0', degree=1)
+w0 = Expression('x[0] <= 2.5 && x[1] >= 1.25 ? 0.1 : 0', degree=1)
+   
+
+u = Function(V)
+w = Function(V)
+u_n = interpolate(u0,V)
+w_n = interpolate(w0,V)
+
+
+F1 = (u - u_n)*v*dx \
++ kt*K*dot(grad(u), grad(v))*dx \
+- kt*(u*v*(1-u)*(u-a))*dx \
++ kt*(w*v)*dx
+
+
+F2 = (w - w_n)*v2*dx \
+-epsilon*v2*kt*(beta*u - gamma*w - sigma)*dx
+
+
+vtkfile_u = File('FHN_NUEMANN/u.pvd')
+vtkfile_w = File('FHN_NEUMANN/w.pvd')
+
+
+
+plot_times = [0,25, 50, 100, 250, 500, 1000]
+
+t = 0
+for n in range(num_steps):
+    # Update current time
+    t += dt
+    #solve(F1 == 0, u)
+    #solve(F2 == 0, w)
+    #solve(F2 == 0, w, bc)
+    #solve(F2 == 0, w, bc)
+    solve(F1 == 0, u, bc)
+    solve(F2 == 0, w, bc)
+    u_n.assign(u)
+    w_n.assign(w)
+
+    # Check if the current time is in the list of desired plot times
+    if t in plot_times:
+        # Save the solution
+        vtkfile_u << (u, t)
+        vtkfile_w << (w, t)
+
+        # Plot the solution
+        plt.figure()
+        p=plot(u)
+        plt.title(f'FEM Solution at $t={t}$',fontsize=18)
+        #plt.colorbar( )
+        #plt.colorbar(p, label=r'$V_m(x, y)$',fontsize=18)
+        cbar = plt.colorbar(p)
+        cbar.set_label(r'$V_m(x, y)$', fontsize=18)
+        #p = plot(u, title=f'FEM Solution at $t={t}$',fontsize=18)
+        #plt.colorbar(p, label=r'$V_m(x, y)$',fontsize=18)
+        plt.xlabel(r'$x$',fontsize=18)
+        plt.ylabel(r'$y$',fontsize=18)
+        plt.savefig(f'FEM_Solution_FHN_t={t}.pdf', dpi=600, transparent=True)
+        #plt.show()
+
+print("Number of verticies:",mesh.num_vertices())
+print("Number of Cells:",mesh.num_cells())
+hmin=mesh.hmin()
+hmax=mesh.hmax()
+print("Cell min size:", hmin)
+print("Cell max size:", hmax)
+print('dt:', dt)
+
+pp=plot(u)
+cbar = plt.colorbar(pp)
+cbar.set_label(r'$V_m(x, y)$', fontsize=18)
+plt.title(f'Solution of FHN',fontsize=18)
+plt.xlabel(r'$x$',fontsize=18)
+plt.ylabel(r'$y$',fontsize=18)
+plt.savefig(f'FEM_Solution_FHN_Final.pdf', dpi=600, transparent=True)
+pyplot.show()
+
+
+
+        
+        
+
+        
