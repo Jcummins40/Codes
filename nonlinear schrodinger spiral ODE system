@@ -1,0 +1,162 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.optimize import root, bisect
+
+# Define the new system of ODEs
+def odes(r, y, k, E):
+    u, v, p, q = y
+    du_dr = v
+    dv_dr = - (2*k + 1)/r * v - u * (2*E - g*r**(2*k) * u**2 - q**2)
+    dp_dr = q
+    dq_dr = - (2*k + 1)/r * q - 2 * q * v / u - eta
+    return np.array([du_dr, dv_dr, dp_dr, dq_dr])
+
+# Implicit Euler step function
+def implicit_euler_step(r, y, h, k, E):
+    def func(ynext):
+        return ynext - y - h * odes(r + h, ynext, k, E)
+    sol = root(func, y)
+    return sol.x
+
+# Define the shooting method
+def shooting_method(Eval, k):
+    u0 = 0.58003766 # Initial value of u at r_start
+    v0 = 0  # Initial value of v at r_start
+    p0 = 0.0  # Initial value of p at r_start              #CHANGE AGAIN BELOW FOR PLOT
+    q0 = 1.0  # Initial value of q at r_start
+    y = np.array([u0, v0, p0, q0])
+
+    r_min = 1e-15
+    r_max = 10.0          #CHANGE AGAIN BELOW FOR PLOT
+    num_steps = 10000
+    r_values = np.linspace(r_min, r_max, num_steps)
+    h = r_values[1] - r_values[0]
+
+    for r in r_values[:-1]:
+        y = implicit_euler_step(r, y, h, k, Eval)
+    
+    u_at_end = y[0]
+    z_at_end = (r_max ** k) * u_at_end
+    return z_at_end - z_infinity
+
+# Define the bisection method for root finding
+def bisection_method(f, a, b, tol=1e-10, max_iter=10000):
+    if np.sign(f(a)) == np.sign(f(b)):
+        raise ValueError("The function has the same sign at both endpoints of the interval.")
+    for _ in range(max_iter):
+        c = (a + b) / 2
+        if np.abs(f(c)) < tol:
+            return c
+        if np.sign(f(c)) == np.sign(f(a)):
+            a = c
+        else:
+            b = c
+    raise ValueError("Bisection method did not converge.")
+
+# Define the Newton's method for root finding with numerical derivative
+def newtons_method(f, x0, tol=1e-7, max_iter=1000, h=1e-12):
+    def numerical_derivative(f, x, h):
+        return (f(x + h) - f(x - h)) / (2 * h)
+    
+    for _ in range(max_iter):
+        f_x0 = f(x0)
+        df_x0 = numerical_derivative(f, x0, h)
+        
+        if np.abs(df_x0) < np.finfo(float).eps:  # Prevent division by zero
+            raise ValueError("Derivative is too small.")
+        
+        x1 = x0 - f_x0 / df_x0
+        
+        if np.abs(x1 - x0) < tol:
+            return x1
+        
+        x0 = x1
+    
+    raise ValueError("Newton's method did not converge.")
+
+# Initial guesses for eigenvalue E
+E_guess_lower = 0.4
+E_guess_upper = 0.6
+
+# Find eigenvalue using bisection method
+k = 1.0  # Single value for k
+z_infinity = 1.0  # The desired value of z as r -> infinity
+g = 1.0
+eta = 0.1
+
+E_solution = bisection_method(lambda E: shooting_method(E, k), E_guess_lower, E_guess_upper)
+# Alternatively, use Newton's method
+# x0 = 1.0
+# E_solution = newtons_method(lambda E: shooting_method(E, k), x0)
+
+print("Eigenvalue E:", E_solution)
+
+# Solve the ODE with the correct initial value of E
+u0 = 0.58003766  # Initial value of u at r_start
+v0 = 0  # Initial value of v at r_start
+p0 = 0.0  # Initial value of p at r_start
+q0 = 1.0  # Initial value of q at r_start
+y = np.array([u0, v0, p0, q0])
+r_min = 1e-15
+r_max = 10.0
+num_steps = 10000
+r_values = np.linspace(r_min, r_max, num_steps)
+
+h = r_values[1] - r_values[0]
+
+u_values = []
+p_values = []
+z_values = []
+
+for r in r_values:
+    u_values.append(y[0])
+    p_values.append(y[2])
+    z_values.append(r**k * y[0])
+    y = implicit_euler_step(r, y, h, k, E_solution)
+
+# Plot u(r) * r^k and its derivative
+u_derivatives = np.gradient(z_values, r_values)
+
+plt.figure(figsize=(12, 8))
+
+# Plot u(r) * r^k
+plt.subplot(2, 1, 1)
+plt.plot(r_values, z_values, color='b')
+plt.xlabel('$r$', fontsize=18)
+plt.ylabel('$\zeta(r) \cdot r$', fontsize=18)
+plt.title('Plot of $u(r) \cdot r^k$')
+
+plt.subplot(2, 1, 2)
+plt.plot(r_values, u_derivatives, color='r')
+plt.xlabel('$r$', fontsize=18)
+plt.ylabel('$\zeta(r) \cdot r$', fontsize=18)
+plt.title('Plot of the derivative of $u(r) \cdot r^k$')
+plt.tight_layout()
+plt.show()
+
+# Separate plots for u and p
+plt.figure(figsize=(12, 6))
+
+# Plot u(r) separately
+plt.plot(r_values, z_values, label=r'$R(r)$', color='b')
+plt.xlabel('$r$', fontsize=18)
+plt.plot(r_values, p_values, label=r'$\beta(r)$', color='g')
+plt.legend(fontsize=18)
+plt.savefig('u_p_separate_g=10.pdf', dpi=600)
+plt.show()
+
+plt.figure(figsize=(12, 6))
+plt.plot(r_values, u_derivatives, color='r')
+plt.axhline(y=0, color='black', linestyle='--')
+plt.xlabel('$r$', fontsize=18)
+plt.ylabel(r'$R^{\prime}$', fontsize=18)
+plt.show()
+
+# Print the found initial conditions
+print(f"Found energy for k={k}: E = {E_solution:.8f}")
+
+min_derivative = np.min(u_derivatives)
+min_derivative_index = np.argmin(u_derivatives)
+r_at_min_derivative = r_values[min_derivative_index]
+print(f"Minimum value of the derivative: {min_derivative}")
+print(f"Value of r where minimum occurs: {r_at_min_derivative}")
