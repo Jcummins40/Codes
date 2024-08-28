@@ -1,0 +1,122 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.integrate import simps
+from scipy.optimize import fsolve
+
+# Define constants
+g = -0.5
+d = 2.0  # Dimension
+ell = 15.0
+sigma = 1.0
+R0 = 2.2
+R1 = 0.0
+hbar = 1.0
+m = 1.0
+N = 2.0
+
+# Define the system of first-order ODEs
+def system(y, r, E):
+    psi, psi_prime = y
+    def V(r):
+        return 0.0
+    f0 = psi_prime
+    f1 = (-2 * E * psi + 2 * g * np.abs(psi)**2 * psi - ((d - 1) / r) * psi_prime)
+    return np.array([f0, f1])
+
+# Define the implicit Euler method
+def implicit_euler(system, y0, r_values, E):
+    step_size = r_values[1] - r_values[0]
+    solution = np.zeros((len(r_values), len(y0)))
+    solution[0] = y0
+
+    for i in range(1, len(r_values)):
+        r = r_values[i]
+        y_old = solution[i - 1]
+
+        # Define the function whose root is to be found
+        def residual(y_new):
+            return y_new - y_old - step_size * system(y_new, r, E)
+
+        # Solve the implicit equation using fsolve
+        y_new_guess = y_old + step_size * system(y_old, r, E)
+        y_new = fsolve(residual, y_new_guess)
+        solution[i] = y_new
+
+    return solution
+
+# Define the shooting method function
+def shooting_method(E):
+    initial_conditions = [R0, 0]
+    r_min = 0.0000001
+    num_steps = 5000
+    r_values = np.linspace(r_min, ell, num_steps)
+    solution = implicit_euler(system, initial_conditions, r_values, E)
+    R_end = solution[-1, 0]
+    return R_end - R1
+
+# Define the bisection method for root finding
+def bisection_method(f, a, b, tol=1e-10, max_iter=10000):
+    if np.sign(f(a)) == np.sign(f(b)):
+        raise ValueError("The function has the same sign at both endpoints of the interval.")
+    for _ in range(max_iter):
+        c = (a + b) / 2
+        if np.abs(f(c)) < tol:
+            return c
+        if np.sign(f(c)) == np.sign(f(a)):
+            a = c
+        else:
+            b = c
+    raise ValueError("Bisection method did not converge.")
+
+E_guess_lower = -0.1
+E_guess_upper = -0.5
+E_solution = bisection_method(shooting_method, E_guess_lower, E_guess_upper)
+
+lam = E_solution * 2 * (ell**2)
+print("lambda: ", lam)
+print("Eigenvalue E:", E_solution)
+
+r_min = 0.0000001
+num_steps = 5000
+r_values = np.linspace(r_min, ell, num_steps)
+initial_conditions = [R0, 0]
+solution = implicit_euler(system, initial_conditions, r_values, E_solution)
+zeta_values = solution[:, 0]
+
+plt.plot(r_values, zeta_values)
+plt.axhline(0, color='black', linestyle='dotted')
+plt.xlabel(r'$r$', fontsize=18)
+plt.ylabel(r'$\psi(r)$', fontsize=18)
+plt.title(fr'$E = {E_solution}$', fontsize=18)
+file_name = fr'Radial_States_E = {E_solution}.pdf'
+plt.savefig(file_name, dpi=600)
+plt.grid(True)
+plt.show()
+
+psi_squared = np.abs(zeta_values)**2
+integral = np.trapz(psi_squared, r_values)
+CN = 1 / np.sqrt(integral)
+normalized_psi = CN * zeta_values
+
+plt.plot(r_values, normalized_psi)
+plt.xlabel(r'$r$', fontsize=18)
+plt.ylabel(r'$\psi(r)$', fontsize=18)
+plt.title(fr'$E = {E_solution}$ (Normalized)', fontsize=18)
+plt.grid(True)
+plt.show()
+
+# Compute the energy
+psi_prime = np.gradient(normalized_psi, r_values)
+kinetic_term = (hbar**2 / (2 * m)) * (psi_prime**2)
+potential_term = 0 * (normalized_psi**2)
+interaction_term = ((N - 1) / 2) * g * (normalized_psi**4)
+
+integrand = r_values * (kinetic_term + potential_term + interaction_term)
+energy = N * simps(integrand, r_values)
+energy2 = N * np.trapz(integrand, r_values)
+landau = energy - E_solution
+
+print("Eigenvalue: ", E_solution)
+print("Energy: ", energy)
+print("Energy2: ", energy2)
+print("Landau Free Energy: ", landau)
