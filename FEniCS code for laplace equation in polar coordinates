@@ -1,0 +1,52 @@
+from dolfin import *
+from mshr import *
+import math
+from fenics import *
+from mshr import *
+import numpy as np
+#from boxfield import *
+import matplotlib.pyplot as plt
+from matplotlib import pyplot
+from mpl_toolkits.mplot3d import Axes3D
+import pygmsh
+
+
+R = 1
+k=1
+E=1
+h=1
+m=1
+
+#domain = Circle(Point(0., 0.), Re,208) - Circle(Point(0., 0.), Ri,104)
+#mesh = generate_mesh(domain, 200)
+T = 2.0            # final time
+num_steps = 200  # number of time steps
+dt = T / num_steps
+TOL = 1e-3
+
+domain = Circle(Point(0., 0.), R,100)
+mesh = generate_mesh(domain, 20)
+V = FunctionSpace(mesh, "P", 1)
+x = SpatialCoordinate(mesh)
+plot(mesh)
+pyplot.show()
+print(mesh.num_cells())
+print(mesh.num_vertices())
+
+u_0_real = Expression('exp(k*atan2(x[1],x[0]))*exp(-1*(E/h)*t)',
+                degree=2, alpha=alpha, beta=beta, t=0)
+
+def boundary(x, on_boundary):
+        return on_boundary
+
+bc = DirichletBC(V, 0.0, boundary)
+
+u_n = interpolate(u_0_real, V)
+
+u = TrialFunction(V)
+v = TestFunction(V)
+t=0
+f = 0
+
+F = u*v*dx + dt*(h/2*m)*dot(grad(u), grad(v))*dx - (u_n + dt*f)*v*dx
+a, L = lhs(F), rhs(F)
