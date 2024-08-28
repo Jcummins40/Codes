@@ -1,0 +1,175 @@
+
+from __future__ import print_function
+from fenics import *
+import numpy as np
+import matplotlib.pyplot as plt
+import csv
+from dolfin import *
+from mshr import *
+import math
+from fenics import *
+from mshr import *
+import numpy as np
+#from boxfield import *
+import matplotlib.pyplot as plt
+from matplotlib import pyplot
+from mpl_toolkits.mplot3d import Axes3D
+import pygmsh
+
+####ERROR WORKS FOR BOTH> IN EITHER CASE SET ONE SMALL dx=0.01 or dt and make the other large.
+#for N in [8, 16, 32]:
+ #   for num_steps in [4, 8, 16, 32, 64, 128]:
+  #      E_L2 = heat(N, num_steps)
+   #     print(N,num_steps,E_L2)
+
+T = 2.0            # final time
+num_steps = 200  # number of time steps
+dt = T / num_steps # time step size
+alpha = 3          # parameter alpha
+beta = 1.2         # parameter beta
+
+
+
+# Create mesh and define function space
+nx = ny = 4
+mesh = UnitSquareMesh(nx, ny)
+V = FunctionSpace(mesh, 'P', 1)
+plot(mesh)
+plt.savefig(f'coarse_square.pdf', dpi=600, transparent=True)
+pyplot.show()
+
+print(mesh.num_cells())
+print(mesh.num_vertices())
+
+# Define boundary condition and IC
+u_D = Expression('1 + x[0]*x[0] + alpha*x[1]*x[1] + beta*t*t',
+                degree=2, alpha=alpha, beta=beta, t=0)
+
+# Define boundary condition
+#u_D = Expression('1 + x[0]*x[0] + alpha*x[1]*x[1] + beta*t',
+                 #degree=2, alpha=alpha, beta=beta, t=0)
+#u_0 = Expression('exp(-a*pow(x[0], 2) - a*pow(x[1], 2))',
+                 #degree=2, a=5)
+
+
+def boundary(x, on_boundary):
+        return on_boundary
+
+bc = DirichletBC(V, u_D, boundary)
+
+# Define initial value
+u_n = interpolate(u_D, V)
+#u_n = project(u_D, V)
+
+# Define variational problem
+u = TrialFunction(V)
+v = TestFunction(V)
+t=0
+f = Constant(2*beta*t - 2 - 2*alpha)
+
+#F = u*v*dx - u_n*v*dx + dt*dot(grad(u_n), grad(v))*dx - dt*f*v*dx     #explicit
+F = u*v*dx + dt*dot(grad(u), grad(v))*dx - (u_n + dt*f)*v*dx
+a, L = lhs(F), rhs(F)
+
+
+
+
+vtkfile = File('gauss_MANUF_CPSC/solution.pvd')
+error_data = []
+u = Function(V)
+    #t = 0
+error_T =0
+for n in range(num_steps):
+
+    # Update current time
+    t += dt
+    u_D.t = t
+    f.assign(2*beta*t-2-2*alpha)
+    # Compute solution
+    solve(a == L, u, bc)
+
+    # Plot solution
+    vtkfile<<(u,t)
+    plot(u)
+    
+
+    # Compute error at vertices
+    #u_e = interpolate(u_D, V)
+    error = errornorm(u_D, u, 'L2')
+    error2 = errornorm(u_D, u, 'H1')
+    error_T += dt*error   #probaboly dont need this
+    
+        #print("max error over all vericies:" 't = %.2f: error = %.3g' % (t, error))
+
+    #append error data to list
+    error_data.append([t, error])
+    # Update previous solution
+    u_n.assign(u)
+
+
+
+print("dt:",dt)
+length_x = mesh.coordinates()[:,0].max() - mesh.coordinates()[:,0].min()
+mesh_size = length_x/nx 
+print("Length of x domain:",length_x)
+print("mesh size:",mesh_size)
+
+
+print("L^2 error:", error)
+print("H^1 error:", error2)
+print("L^2 dt error:", error_T)   #probaboly dont need this
+
+
+
+#print(N=8,num_steps=4,E_L2)
+
+# Hold plot
+#interactive()
+########################Excel Error File#########
+"""""
+error_L2 = errornorm(u_e, u, 'L2')
+#compute nodes numbers
+num_node = mesh.num_vertices()
+length_x = mesh.coordinates()[:,0].max() - mesh.coordinates()[:,0].min()
+mesh_size = length_x/nx 
+print("Length of x domain:",length_x)
+print("mesh size:",mesh_size)
+
+#print("L^2 error:", error_L2)
+with open('error_heat_GAUSS_MARCH.csv', 'w', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow(['Time', 'Error'])  # Write header row
+            writer.writerows(error_data)  # Write data rows
+            writer.writerow(["L^2 Error", error_L2])
+            writer.writerow(["Nodes", num_node])
+            writer.writerow(["domain length", length_x])
+print("Data saved as 'error_heat_GAUSS_MARCH.csv'")
+
+
+
+print("L^2 error:", error_L2)
+print("number of nodes:", num_node) 
+
+
+error_L2 = errornorm(u_e, u, 'L2')
+print("L^2 error:", error_L2)
+
+#compute nodes numbers
+
+
+print("Length of x domain:",length_x)
+print("mesh size rough:",mesh_size)
+print("number of nodes rough:", num_node)
+
+print("dt:", dt)
+#print("L^2 error:", error_L2)
+with open('error_heat_MANU.csv', 'w', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow(["L^2 Error", error_L2])
+            writer.writerow(["Nodes approx", num_node])
+            writer.writerow(["domain length", length_x])
+            writer.writerow(["mesh size rough:",mesh_size])
+            writer.writerow(["dt:",dt])
+print("Data saved as 'error_heat_MANU.csv'")
+
+"""
