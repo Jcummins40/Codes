@@ -1,0 +1,55 @@
+from dolfin import *
+import mshr
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib import pyplot
+from timeit import default_timer as timer
+
+start = timer()
+
+nx = ny = 50
+mesh = RectangleMesh(Point(0, 0), Point(1.41421356237, 1.41421356237), nx, ny)
+V = FunctionSpace(mesh, "Lagrange", 1)
+f=Constant(0.0)
+
+bc = DirichletBC(V, 0.0, DomainBoundary())
+u, v = TrialFunction(V), TestFunction(V)
+
+a = inner(grad(u), grad(v))*(0.5)*dx
+L = f*v*dx
+m = u*v*dx
+
+
+A, _ = assemble_system(a, L, bc)
+B = assemble(m)
+
+#print(Discrete space size: %d)%V.dim()
+eigensolver = SLEPcEigenSolver(as_backend_type(A), as_backend_type(B))
+#prm = eigensolver.parameters
+#info(prm, True)
+eigensolver.parameters['spectrum'] = 'smallest magnitude'
+print("Computing eigenvalues. This can take a minute.")
+N_eig = 4
+vtkfile = File('eigenplots.pvd')
+eigensolver.solve(N_eig)
+
+for i in range(0, N_eig):
+    r, c, rx, cx = eigensolver.get_eigenpair(i)
+    print("Largest eigenvalue real part: ", r)
+    print("Largest eigenvalue complex part: ", c)
+
+# Initialize function and assign eigenvector
+    eigenmode = Function(V, name="Eigenvector"+ str(i))
+    eigenmode.vector()[:] = rx
+    #eigenmode.vector()[:] = cx
+
+# Plot eigenfunction
+    vtkfile << eigenmode,i
+    p=plot(eigenmode,i)
+    p.set_cmap("viridis")
+    pyplot.colorbar(p)
+    pyplot.show()
+   
+
+end = timer()
+print(end - start)
