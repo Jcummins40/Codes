@@ -1,0 +1,364 @@
+
+
+
+
+
+##################TRYING TO USE SOLVE_IVP####################
+
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.integrate import solve_ivp
+
+# Define constants
+g = -0.5
+k = 2.0
+R1 = 0.0
+ell = 25.0
+Estart = -0.5
+
+
+
+
+
+# Define the system of first-order ODEs
+def system(r, y, R0):
+    zeta, eta = y
+    dzeta_dt = eta
+    deta_dt = -1*((2*k+1)/r) * eta + (-2*(Estart) + 2*g*abs(zeta)**2 * r**(2*k)) * zeta
+    return [dzeta_dt, deta_dt]
+
+# Define the shooting method function
+def shooting_method(R0):
+    # Initial conditions for zeta1 and zeta1_prime at r=0
+    initial_conditions = [R0, 0]
+
+    # Range of r values
+    r_min = 1e-10
+    r_values = (r_min, ell)
+
+    t_eval2 = np.linspace(r_min, ell, 50000)  # Increased number of points for a finer mesh
+
+    # Solve the system of ODEs for the given R0
+    solution = solve_ivp(system, r_values, initial_conditions, args=(R0,), method='LSODA', t_eval=t_eval2, rtol=1e-8, atol=1e-10) #t_eval=t_eval
+    
+    # Extract the value of zeta1 at r=ell
+    #R_end = solution.sol(ell)[0]
+    R_end = (solution.y[0, -1])*(ell**k)
+
+    return R_end - R1
+
+
+
+
+
+
+
+    
+    # Extract the value of zeta1 at r=ell
+    
+
+
+
+# Define the bisection method for root finding
+def bisection_method(f, a, b, tol=1e-8, max_iter=10000):
+    if np.sign(f(a)) == np.sign(f(b)):
+        raise ValueError("The function has the same sign at both endpoints of the interval.")
+
+    for _ in range(max_iter):
+        c = (a + b) / 2
+        if np.abs(f(c)) < tol:
+            return c
+        if np.sign(f(c)) == np.sign(f(a)):
+            a = c
+        else:
+            b = c
+    raise ValueError("Bisection method did not converge.")
+
+
+
+
+
+
+# Perform the root finding for R0
+R0_guess_lower = 0.0001  # Initial guess for lower bound of R0
+R0_guess_upper = 4.0  # Initial guess for upper bound of R0
+R0_solution = bisection_method(shooting_method, R0_guess_lower, R0_guess_upper)
+print("R0:", R0_solution)
+
+
+
+
+
+
+
+# Plot the solution for R0
+# Solve the system of ODEs with the computed R0
+initial_conditions = [R0_solution, 0]
+r_min = 1e-10
+r_values2 = np.linspace(r_min, ell, 50000)
+
+
+
+
+solution = solve_ivp(system, (r_min, ell), initial_conditions, args=(R0_solution,),  method='BDF',t_eval=r_values2,rtol=1e-8, atol=1e-10)
+zeta_values = solution.y[0]
+
+
+
+
+# Plot r vs zeta
+plt.plot(r_values2, zeta_values)
+plt.axhline(0, color='black', linestyle='dotted')
+plt.xlabel(r'$r$', fontsize=18)
+plt.ylabel(r'$\Gamma(r)$', fontsize=18)
+plt.title(fr'$R_0 = {R0_solution}$', fontsize=18)
+plt.grid(True)
+plt.show()
+
+
+
+
+
+
+# Plot the normalized radial states
+def sech_potential(r, k):
+    r_max = np.sqrt(2) * k
+    return np.sqrt(3) / (np.cosh((r - r_max) / np.sqrt(2/3)))
+
+#approx_values = sech_potential(r_values2, k)
+R_r = zeta_values * (r_values2**k)
+
+
+
+
+
+
+plt.plot(r_values2, R_r)
+#plt.plot(r_values2, approx_values, linestyle='dashed', label=r'$\sqrt{3}\,\operatorname{sech}\left(\frac{r-\sqrt{2}}{\sqrt{\frac{2}{3}}} \right)$')
+plt.axhline(0, color='black', linestyle='dotted')
+plt.xlabel(r'$r$', fontsize=18)
+plt.ylabel(fr'$R_{4}(r)$', fontsize=18)
+plt.title(r'$\tilde{c} =$' fr'${R0_solution}$', fontsize=18)
+plt.legend(fontsize=16)
+file_name = fr'IC_Comparison_approx_numerical_GS_Vortex-C= {R0_solution}.pdf'
+#plt.savefig(file_name, dpi=600)
+#plt.grid(True)
+plt.show()
+
+
+
+
+
+"""
+theta = np.linspace(0, 2*np.pi, 4000)
+
+r, theta = np.meshgrid(r_values2, theta)
+x = r * np.cos(theta)
+y = r * np.sin(theta)
+
+Vortex_solution = R_r * np.exp(1j * (k * theta))
+
+
+
+
+
+vmin = min(np.real(Vortex_solution).min(), np.imag(Vortex_solution).min())
+vmax = max(np.real(Vortex_solution).max(), np.imag(Vortex_solution).max())
+
+
+
+
+
+
+plt.figure(figsize=(10, 6))
+plt.pcolormesh(x, y, np.real(Vortex_solution), cmap='viridis', shading='auto', vmin=vmin, vmax=vmax)
+plt.xlabel(r'$x$',fontsize=18)
+plt.ylabel(r'$y$',fontsize=18)
+#plt.title(fr'$E = {E_solution},\qquad k = {k}$', fontsize=18)
+cbar = plt.colorbar(label=r'$\Re[\psi(x,y)]$')
+cbar.set_label(r'$\Re[\psi(x,y)]$', fontsize=18)
+cbar.ax.tick_params(labelsize=16)
+#plt.colorbar(label=r'$\Re[\psi(x,y)]$', fontsize=18)
+#plt.title('NLS')
+#plt.title(fr'$k = {k}$,$\quad$ $g = {gg}$, $\quad$ $E={E}$')
+#plt.legend()
+file_name = fr'REAL_Vortex_ES_k={k}.png'
+#plt.savefig(file_name, dpi=600)
+#plt.grid(True)
+#plt.show()
+#plt.savefig('spiral_solution_plotNLS_colormesh.png', dpi=600)  # Adjust the file name and dpi as needed
+plt.show()
+
+"""
+
+
+###############################
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#######################
+
+"""
+
+
+# Plot r vs zeta
+plt.plot(r_values2, zeta_values)
+plt.axhline(0, color='black', linestyle='dotted')
+plt.xlabel(r'$r$', fontsize=18)
+plt.ylabel(r'$\Gamma(r)$', fontsize=18)
+plt.title(fr'$R_0 = {R0_solution}$', fontsize=18)
+plt.grid(True)
+plt.show()
+
+
+
+
+# Plot the normalized radial states
+def sech_potential(r, k):
+    r_max = np.sqrt(2) * k
+    return np.sqrt(3) / (np.cosh((r - r_max) / np.sqrt(2/3)))
+
+approx_values = sech_potential(r_values2, k)
+R_r = solution[:, 0] * (r_values2**k)
+
+
+plt.plot(r_values2, R_r)
+plt.plot(r_values2, approx_values, linestyle='dashed', label=r'$\sqrt{3}\,\operatorname{sech}\left(\frac{r-\sqrt{2}}{\sqrt{\frac{2}{3}}} \right)$')
+plt.axhline(0, color='black', linestyle='dotted')
+plt.xlabel(r'$r$', fontsize=18)
+plt.ylabel(fr'$R_{4}(r)$', fontsize=18)
+plt.title(r'$\tilde{c} =$' fr'${R0_solution}$', fontsize=18)
+plt.legend(fontsize=16)
+file_name = fr'IC_Comparison_approx_numerical_GS_Vortex-C= {R0_solution}.pdf'
+#plt.savefig(file_name, dpi=600)
+#plt.grid(True)
+plt.show()
+
+
+
+integral_value = np.trapz(approx_values**2 * r_values2, r_values2)
+integral_value2 = np.trapz(R_r**2 * r_values2, r_values2)
+normalization_constant = 1.0 / np.sqrt(integral_value)
+normalization_constant2 = 1.0 / np.sqrt(integral_value2)
+
+plt.plot(r_values2, R_r * normalization_constant2)
+plt.plot(r_values2, approx_values * normalization_constant)
+plt.axhline(0, color='black', linestyle='dotted')
+plt.xlabel(r'$r$', fontsize=18)
+plt.ylabel(fr'$R_{1}(r)$', fontsize=18)
+plt.title(r'$\tilde{c} =$' fr'${R0_solution}$', fontsize=18)
+plt.grid(True)
+plt.show()
+
+
+
+
+theta = np.linspace(0, 2*np.pi, 4000)
+
+r, theta = np.meshgrid(r_values2, theta)
+x = r * np.cos(theta)
+y = r * np.sin(theta)
+
+Vortex_solution = normalization_constant2*R_r * np.exp(1j * (k * theta))
+
+vmin = min(np.real(Vortex_solution).min(), np.imag(Vortex_solution).min())
+vmax = max(np.real(Vortex_solution).max(), np.imag(Vortex_solution).max())
+
+
+plt.figure(figsize=(10, 6))
+plt.pcolormesh(x, y, np.real(Vortex_solution), cmap='viridis', shading='auto', vmin=vmin, vmax=vmax)
+plt.xlabel(r'$x$',fontsize=18)
+plt.ylabel(r'$y$',fontsize=18)
+#plt.title(fr'$E = {E_solution},\qquad k = {k}$', fontsize=18)
+cbar = plt.colorbar(label=r'$\Re[\psi(x,y)]$')
+cbar.set_label(r'$\Re[\psi(x,y)]$', fontsize=18)
+cbar.ax.tick_params(labelsize=16)
+#plt.colorbar(label=r'$\Re[\psi(x,y)]$', fontsize=18)
+#plt.title('NLS')
+#plt.title(fr'$k = {k}$,$\quad$ $g = {gg}$, $\quad$ $E={E}$')
+#plt.legend()
+file_name = fr'REAL_Vortex_ES_k={k}.png'
+#plt.savefig(file_name, dpi=600)
+#plt.grid(True)
+#plt.show()
+#plt.savefig('spiral_solution_plotNLS_colormesh.png', dpi=600)  # Adjust the file name and dpi as needed
+plt.show()
+
+plt.figure(figsize=(10, 6))
+plt.pcolormesh(x, y, np.imag(Vortex_solution), cmap='plasma', shading='auto', vmin=vmin, vmax=vmax)
+plt.xlabel(r'$x$',fontsize=18)
+plt.ylabel(r'$y$',fontsize=18)
+#plt.title(fr'$E = {E_solution},\qquad k = {k}$', fontsize=18)
+cbar = plt.colorbar(label=r'$\Im[\psi(x,y)]$')
+cbar.set_label(r'$\Im[\psi(x,y)]$', fontsize=18)
+cbar.ax.tick_params(labelsize=16)
+#plt.colorbar(label=r'$\Re[\psi(x,y)]$', fontsize=18)
+#plt.title('NLS')
+#plt.title(fr'$k = {k}$,$\quad$ $g = {gg}$, $\quad$ $E={E}$')
+#plt.legend()
+file_name = fr'REAL_Vortex_ES_k={k}.png'
+#plt.savefig(file_name, dpi=600)
+#plt.grid(True)
+#plt.show()
+#plt.savefig('spiral_solution_plotNLS_colormesh.png', dpi=600)  # Adjust the file name and dpi as needed
+plt.show()
+
+plt.figure(figsize=(10, 6))
+plt.pcolormesh(x, y, np.imag(Vortex_solution)**2+np.real(Vortex_solution)**2, cmap='cool', shading='auto', vmin=vmin, vmax=vmax)
+plt.xlabel(r'$x$',fontsize=18)
+plt.ylabel(r'$y$',fontsize=18)
+#plt.title(fr'$E = {E_solution},\qquad k = {k}$', fontsize=18)
+cbar = plt.colorbar(label=r'$|\psi(x,y)|^2$')
+cbar.set_label(r'$|\psi(x,y)|^2$', fontsize=18)
+cbar.ax.tick_params(labelsize=16)
+#plt.colorbar(label=r'$\Re[\psi(x,y)]$', fontsize=18)
+#plt.title('NLS')
+#plt.title(fr'$k = {k}$,$\quad$ $g = {gg}$, $\quad$ $E={E}$')
+#plt.legend()
+file_name = fr'REAL_Vortex_ES_k={k}.png'
+#plt.savefig(file_name, dpi=600)
+#plt.grid(True)
+#plt.show()
+#plt.savefig('spiral_solution_plotNLS_colormesh.png', dpi=600)  # Adjust the file name and dpi as needed
+plt.show()
+
+
+
+
+
+
+from mpl_toolkits.mplot3d import Axes3D
+
+
+
+fig = plt.figure(figsize=(8, 8))
+ax = fig.add_subplot(111, projection='3d')
+
+surf = ax.plot_surface(x, y, np.real(Vortex_solution), cmap='viridis', linewidth=0, antialiased=False)
+colorbar=fig.colorbar(surf, ax=ax)
+colorbar.ax.tick_params(labelsize=16) 
+colorbar.set_label(label=r'$\Re[\psi(x,y)]$',fontsize=20)
+
+ax.set_xlabel(r'$x$',fontsize=16)
+ax.set_ylabel(r'$y$',fontsize=16)
+#ax.set_zlabel(r'$\Re[\psi(x,y)]$')
+ax.view_init(elev=15, azim=45)
+
+#plt.title(fr'$E = {E_solution},\qquad k = {k}$', fontsize=18)
+file_name = fr'3D_Vortex_REAL_ES_k = {k}.png'
+#plt.savefig(file_name, dpi=600)
+plt.show()
+"""
