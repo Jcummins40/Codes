@@ -1,0 +1,152 @@
+import numpy as np
+import matplotlib.pyplot as plt
+
+
+import torch
+
+#pip install git+https://github.com/rtqichen/torchdiffeq
+import torchdiffeq
+from torchdiffeq import odeint_adjoint as odeint
+
+
+
+
+import torch
+from torchdiffeq import odeint
+
+
+
+
+
+k = 2.0  # positive integer
+g = -0.5  # some constant
+sigma = 1.0  # some constant
+E = -0.5  # some constant
+
+def call(t, XY):
+    P=XY[0]
+    Q=XY[1]
+    S=XY[2]
+    T=XY[3]
+    dP_dr = torch.Tensor([Q])
+    dQ_dr = torch.Tensor([-(2*k + 1) / t * Q + (1  + 2*g*(P**2 + S**2) * t**(2*k)) * P + (2*k + 1) / t * S + 2*T - 2*E*P])
+    dS_dr = torch.Tensor([T])
+    dT_dr = torch.Tensor([-(2*k + 1) / t * T + (1  + 2*g*(P**2 + S**2) * t**(2*k)) * S - (2*k + 1) / t * P - 2*Q - 2*E*S])
+    
+    return torch.cat([dP_dr, dQ_dr, dS_dr, dT_dr])
+
+
+t_begin=0.0000001
+t_end=15.
+t_nsamples=10000
+t_space = np.linspace(t_begin, t_end, t_nsamples)
+P_init = torch.Tensor([1.0])
+Q_init = torch.Tensor([0.])
+S_init = torch.Tensor([0.])
+T_init = torch.Tensor([0.])
+
+
+
+num_sol = odeint(call, torch.cat([P_init, Q_init, S_init, T_init]), torch.Tensor(t_space)).numpy()
+
+plt.figure()
+plt.plot(t_space, num_sol[:,0], linewidth=1, label='numerical P')
+plt.plot(t_space, num_sol[:,2], linewidth=1, label='numerical S')
+plt.title('TorchDiffEq')
+plt.xlabel(r'$r$')
+plt.legend()
+plt.show()
+
+
+plt.figure()
+plt.plot(t_space, num_sol[:,0]*(t_space**k), linewidth=1, label='numerical P')
+plt.title('TorchDiffEq')
+plt.xlabel(r'$r$')
+plt.legend()
+plt.show()
+
+
+from scipy.integrate import solve_ivp
+
+def system_of_ODEs(r, y, k, V, g, sigma, E):
+    P, Q, S, T = y
+    
+    dP_dr = Q
+    dQ_dr = -(2*k + 1) / r * Q + (1 + 2*V(r) + 2*g*(P**2 + S**2)**sigma * r**(2*k*sigma)) * P + (2*k + 1) / r * S + 2*T - 2*E*P
+    dS_dr = T
+    dT_dr = -(2*k + 1) / r * T + (1 + 2*V(r) + 2*g*(P**2 + S**2)**sigma * r**(2*k*sigma)) * S - (2*k + 1) / r * P - 2*Q - 2*E*S
+    
+    return [dP_dr, dQ_dr, dS_dr, dT_dr]
+
+# Define the potential function V(r)
+def V(r):
+    # Define your potential function here, for example:
+    return 0
+
+# Define parameters
+k = 2.0  # positive integer
+g = -0.5  # some constant
+sigma = 1.0  # some constant
+E = -0.5  # some constant
+
+# Define initial conditions
+a = 1.0  # some value
+b = 0  # some value
+initial_conditions = [a, 0, b, 0]
+
+# Define the range for r
+r_span = (0.00000001, 15)
+num_points = 10000  # Increase this value to increase the step size
+
+# Generate equally spaced points for evaluation
+r_values_eval = np.linspace(r_span[0], r_span[1], num_points)
+
+# Solve the system of ODEs
+
+solution = solve_ivp(lambda r, y: system_of_ODEs(r, y, k, V, g, sigma, E), r_span, initial_conditions, method='RK45', t_eval=r_values_eval)
+
+# Extract the solution
+r_values = solution.t
+P_values, Q_values, S_values, T_values = solution.y
+
+
+# Plot P and S
+plt.figure(figsize=(10, 6))
+plt.plot(r_values, P_values,linestyle=(0, ()), linewidth=2,color ='red', label='Runge-Kutta')
+plt.plot(t_space, num_sol[:,0], linestyle=(0, (5, 10)), linewidth=2, color='blue', label='Torch')
+plt.xlabel(r'$r$', fontsize=20)
+plt.ylabel(r'$\zeta_1$', fontsize=20)
+plt.legend(fontsize=16)
+plt.title(fr' $k={k}$,$\qquad g={g}$, $\qquad E={E}$', fontsize=20)
+#plt.savefig(fr'pytorch_real.pdf', dpi=600)
+plt.show()
+
+# Plot P and S
+plt.figure(figsize=(10, 6))
+plt.plot(r_values, S_values,linestyle=(0, ()), linewidth=2,color ='red', label='Runge-Kutta')
+plt.plot(t_space, num_sol[:,2], linestyle=(0, (5, 10)), linewidth=2, color='blue', label='Torch')
+plt.xlabel(r'$r$', fontsize=20)
+plt.ylabel(r'$\zeta_2$', fontsize=20)
+plt.legend(fontsize=16)
+plt.title(fr' $k={k}$,$\qquad g={g}$, $\qquad E={E}$', fontsize=20)
+#plt.savefig(fr'pytorch_imag.pdf', dpi=600)
+plt.show()
+
+plt.figure(figsize=(10, 6))
+plt.plot(t_space, num_sol[:,1]**2 +num_sol[:,2]**2, linewidth=2, color='green', label='Torch')
+plt.xlabel(r'$r$')
+plt.ylabel(r'$|\zeta|^2$',fontsize=20)
+plt.legend(fontsize=16)
+plt.title(fr' $k={k}$,$\qquad g={g}$, $\qquad E={E}$', fontsize=20)
+#plt.savefig(fr'pytorch_modsq.pdf', dpi=600)
+plt.show()
+
+plt.figure(figsize=(10, 6))
+plt.plot(r_values, P_values*(r_values**k),linestyle=(0, ()), linewidth=2,color ='red', label='Runge-Kutta')
+plt.plot(t_space, num_sol[:,0]*(t_space**k), linestyle=(0, (5, 10)), linewidth=2,color='blue', label='Torch')
+plt.xlabel(r'$r$',fontsize=20)
+plt.ylabel(r'$\zeta_1\,r^k$',fontsize=20)
+plt.legend(fontsize=16)
+plt.title(fr' $k={k}$,$\qquad g={g}$, $\qquad E={E}$', fontsize=20)
+#plt.savefig(fr'R_TORCH_real.pdf', dpi=600)
+plt.show()
